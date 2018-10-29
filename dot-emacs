@@ -1,0 +1,477 @@
+;;; .emacs -- Matthew Doty's emacs configuration
+
+;;; Commentary:
+;;;   This is a minimal .emacs for haskell development
+
+;;; Code:
+
+;;; Package Management ;;;
+
+(require 'package)
+(add-to-list 'package-archives
+  '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+
+(eval-when-compile
+  (when (not (package-installed-p 'use-package))
+    (package-refresh-contents)
+    (package-install 'use-package))
+  (require 'use-package))
+
+(setq use-package-always-ensure t)
+
+;;; Interface ;;;
+
+(fset 'yes-or-no-p 'y-or-n-p)
+(setq
+  inhibit-startup-screen      t        ; No startup screen
+  disabled-command-function   nil      ; No prompts
+  ring-bell-function          'ignore  ; No error bell
+  interprogram-cut-function   nil      ; No system clipboard (copy)
+  interprogram-paste-function nil      ; No system clipboard (paste)
+  )
+(tool-bar-mode -1)                    ; No tool-bar
+(menu-bar-mode -1)                    ; No menu-bar
+(blink-cursor-mode -1)                ; No cursor blinking
+
+(when (eq system-type 'darwin)
+  (setq-default
+    mac-control-modifier 'control
+    mac-option-modifier  'meta
+    mac-command-modifier 'super))
+
+;; Don't deselect after copy
+(defadvice kill-ring-save (after keep-transient-mark-active ())
+  "Override the deactivation of the mark."
+  (setq deactivate-mark nil))
+(ad-activate 'kill-ring-save)
+
+;; Status bar
+
+(setq display-time-day-and-date t)
+(display-time-mode 1)
+(setq-default display-time-24hr-format t)
+(display-battery-mode 1)
+(setq-default battery-mode-line-format " [%b%t]")
+
+(require 'uniquify)
+(setq uniquify-buffer-name-style 'reverse)
+
+;; Save position
+(use-package saveplace :init (save-place-mode))
+
+;; Use shell exec path
+(use-package exec-path-from-shell
+  :when (memq window-system '(mac ns x))
+  :config
+  (setq exec-path-from-shell-check-startup-files nil)
+  (exec-path-from-shell-initialize))
+
+;; Ido mode
+(ido-mode t)
+(setq-default
+  ido-use-filename-at-point 'guess
+  ido-use-url-at-point      t
+  ido-create-new-buffer     'always)
+
+(use-package flx-ido
+  :config
+  (flx-ido-mode 1)
+  (setq-default
+    ido-enable-flex-matching t
+    ido-use-faces            nil))
+
+;; Find file with line number at point
+;; https://www.emacswiki.org/emacs/FindFileAtPoint#toc6
+
+(defvar ffap-file-at-point-line-number nil
+  "Variable to hold line number from the last `ffap-file-at-point' call.")
+
+(defadvice ffap-file-at-point (after ffap-store-line-number activate)
+  "Search `ffap-string-at-point' for a line number pattern and save it in the `ffap-file-at-point-line-number' variable."
+  (let* ((string (ffap-string-at-point)) ;; string/name definition copied from `ffap-string-at-point'
+          (name
+            (or (condition-case nil
+                  (and (not (string-match "//" string)) ; foo.com://bar
+                    (substitute-in-file-name string))
+                  (error nil))
+              string))
+          (line-number-string
+            (and (string-match ":[0-9]+" name)
+              (substring name (1+ (match-beginning 0)) (match-end 0))))
+          (line-number
+            (and line-number-string
+              (string-to-number line-number-string))))
+    (if (and line-number (> line-number 0))
+      (setq ffap-file-at-point-line-number line-number)
+      (setq ffap-file-at-point-line-number nil))))
+
+(defadvice find-file-at-point (after ffap-goto-line-number activate)
+  "If `ffap-file-at-point-line-number' is non-nil goto this line."
+  (when ffap-file-at-point-line-number
+    (goto-line ffap-file-at-point-line-number)
+    (setq ffap-file-at-point-line-number nil)))
+
+;;; Eshell ;;;
+
+(defun eshell/open (file)
+  "Eshell command to open a FILE or FILES."
+  (find-file file))
+(defun eshell/openo (file)
+  "Eshell command to open a FILE or FILES in another window."
+  (find-file-other-window file))
+(defun eshell/bat (file)
+  "Eshell command to open a FILE or FILES (read only)."
+  (find-file-read-only-other-window file))
+(defun eshell/emacs (file &rest files)
+  "Hack EMACS to just open a FILE or FILES in eshell."
+  (apply #'eshell/open (cons file files)))
+(defun eshell/less (file &rest files)
+  "Hack less to open a FILE or FILES (read only)."
+  (apply #'eshell/bat (cons file files)))
+(defun eshell/more (file &rest files)
+  "Hack more to open a FILE or FILES (read only)."
+  (apply #'eshell/bat (cons file files)))
+
+;;; Copy-Pasta ;;;
+
+(use-package simpleclip
+  :config
+  ;; Settup interprogram clipboard interaction
+  ;;; For X-Windows
+  (when (eq window-system 'x)
+    (global-set-key (kbd "C-S-c") 'simpleclip-copy)
+    (global-set-key (kbd "C-S-x") 'simpleclip-cut)
+    (global-set-key (kbd "C-S-v") 'simpleclip-paste))
+  ;;; For OSX
+  (when (memq window-system '(mac ns))
+    (simpleclip-mode 1)))
+
+;;; Window-System ;;;
+
+(when window-system
+  ;; Window System Configuration
+  (when (fboundp 'scroll-bar-mode) (scroll-bar-mode -1)) ; No scrollbar
+
+  ;; Transparency
+  (set-frame-parameter (selected-frame) 'alpha '(95 95))
+
+  ;; Font Ligatures for OS X
+  (when (fboundp 'mac-auto-operator-composition-mode)
+    (mac-auto-operator-composition-mode)
+    (add-to-list 'default-frame-alist '(font . "Hasklig-14"))
+    (set-face-attribute 'default t :font "Hasklig-14"))
+
+  (setq default-directory "~/")             ; Default directory is home directory
+
+  (when (equal system-type 'darwin)
+    ;; Manipulate font size with usual bindings
+    ;; To return to default font size, <C-x C-0>
+    (global-set-key (kbd "s-=")              'text-scale-increase)
+    (global-set-key (kbd "s-+")              'text-scale-increase)
+    (global-set-key (kbd "s--")              'text-scale-decrease)
+
+    ;; Common key bindings
+    ;; TODO: Isolate emacs clipboard from system clipboard
+    (global-set-key (kbd "s-a")              'mark-whole-buffer)       ; Select all
+
+    ;; Searching
+    (global-set-key (kbd "s-f")              'isearch-forward)         ; Forward-search
+    (global-set-key (kbd "s-g")              'isearch-repeat-forward)  ; Forward-search (again)
+    (define-key isearch-mode-map (kbd "s-f") 'isearch-repeat-forward)  ; Forward-search (again)
+    (global-set-key (kbd "s-F")              'isearch-backward)        ; Backward-search
+    (global-set-key (kbd "s-G")              'isearch-repeat-backward) ; Backward-search (again)
+    (define-key isearch-mode-map (kbd "s-F") 'isearch-repeat-backward) ; Forward-search (again)
+
+    (global-set-key (kbd "s-z")              'undo)                    ; Undo
+    (global-set-key (kbd "s-s")              'save-buffer)             ; Save
+    (global-set-key (kbd "s-q")              'kill-emacs)              ; Quit
+    (global-set-key (kbd "s-;")              'comment-line)            ; Comment line
+    (global-set-key (kbd "<s-mouse-1>")      'find-file-at-point)      ; Open file clicked
+    )
+
+  (when (eq window-system 'x)
+    ;; Manipulate font size with usual bindings
+    ;; To return to default font size, <C-x C-0>
+    (global-set-key (kbd "C-=") 'text-scale-increase)
+    (global-set-key (kbd "C-+") 'text-scale-increase)
+    (global-set-key (kbd "C--") 'text-scale-decrease)
+    )
+  )
+
+(use-package material-theme
+  ;; :when window-system
+  :config (load-theme 'material t))
+
+;; TODO: Doesn't work on gnome-terminal ; find better theme
+;; (use-package cyberpunk-theme
+;;   :unless  window-system
+;;   :config (load-theme 'cyberpunk t))
+
+;;; Prog-Mode ;;;
+
+(add-hook 'prog-mode-hook 'display-line-numbers-mode)
+
+(use-package company
+  :demand
+  :diminish ""
+  :hook (prog-mode . company-mode)
+  :config
+  (setq
+    company-tooltip-limit  20                      ; bigger popup window
+    company-idle-delay     .3                      ; decrease delay before autocompletion popup shows
+    company-echo-delay     0                       ; remove annoying blinking
+    company-begin-commands '(self-insert-command)  ; start autocompletion only after typing
+    ))
+
+(use-package rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+(use-package paren
+  :hook (prog-mode . show-paren-mode)
+  :commands color-complement-hex
+  :config
+  (require 'color)
+  (let ((cursor-color (face-attribute 'cursor :background)))
+    (set-face-background 'show-paren-match (color-complement-hex cursor-color))
+    (set-face-foreground 'show-paren-match cursor-color))
+  )
+
+(use-package ethan-wspace
+  :hook (prog-mode . ethan-wspace-mode)
+  :init (setq-default mode-require-final-newline nil)
+  :commands (ethan-wspace-clean-all clean-up-tabs set-makefile-whitespace-mode)
+  :config
+  (add-hook 'before-save-hook #'ethan-wspace-clean-all)
+  (setq-default
+    tab-width         2
+    indent-tabs-mode  nil
+    )
+
+  ;; Only use tabs when making makefiles
+  (defun clean-up-tabs ()
+    "Cleans up tabs if not in `indent-tabs-mode`."
+    (unless indent-tabs-mode
+      (untabify (point-min) (point-max))))
+  (add-hook 'before-save-hook #'clean-up-tabs)
+
+  (defun set-makefile-whitespace-mode ()
+    "Change whitespace settings to accept tabs, in a manner suitable for a Makefile."
+    (setq ethan-wspace-errors (remove 'tabs ethan-wspace-errors)
+      indent-tabs-mode    t))
+  (add-hook 'makefile-mode-hook #'set-makefile-whitespace-mode)
+  )
+
+;;; Magit ;;;
+
+(use-package magit
+  :bind ("C-c g" . magit-status)
+  :config
+  ;; (setq-default
+  ;;   magit-repo-dirs          '("~/wip" "~/src")
+  ;;   magit-push-always-verify nil)
+  )
+
+(use-package evil
+  :commands (evil-set-initial-state
+              evil-ex-define-cmd
+              set-evil-initial-state-in-normal-mode)
+  :init     (evil-mode)         ; Evil has to be global :-/
+  :config
+  ;; Ignore evil-mode except for prog-mode
+  (setq
+    evil-default-state  'emacs   ; Make default state be emacs (for repls and stuff)
+    evil-default-cursor t        ; Use default emacs cursor
+    evil-shift-width    2        ; Use 2 spaces when shifting with <<>>
+    )
+
+  ;; Most of the time we don't want to be in evil-mode, except for prog-mode
+  (defun set-evil-initial-state-in-normal-mode ()
+    "Puts evil in `normal` mode in its initial state."
+    (interactive) (evil-set-initial-state major-mode 'normal))
+  (add-hook 'prog-mode-hook #'set-evil-initial-state-in-normal-mode)
+
+  ;;;; Custom behavior to keep evil from zealously killing emacs when in window-system
+  ;;;; TODO: Incorporate http://zuttobenkyou.wordpress.com/category/emacs/
+  (when window-system
+    (defun save-and-kill-buffer ()
+      (interactive)
+      (save-buffer)
+      (kill-buffer))
+
+    (define-key evil-normal-state-map "ZZ" 'save-and-kill-buffer)
+    (define-key evil-normal-state-map "ZQ" 'evil-delete-buffer)
+    (evil-ex-define-cmd "q[uit]" 'evil-delete-buffer)
+    (evil-ex-define-cmd "wq" 'save-and-kill-buffer))
+
+  :bind (:map evil-normal-state-map
+          ("C-a" . move-beginning-of-line)
+          ("C-e" . move-end-of-line)
+          :map evil-visual-state-map
+          ("C-a" . move-beginning-of-line)
+          ("C-e" . move-end-of-line)
+          :map evil-insert-state-map
+          ("C-a" . move-beginning-of-line)
+          ("C-e" . move-end-of-line)))
+
+;;; Flycheck Mode ;;;
+
+(use-package flycheck-haskell
+  :commands flycheck-haskell-setup)
+
+(use-package flycheck
+  :after    flycheck-haskell
+  :defer    0
+  :commands (global-flycheck-mode flycheck-mode)
+  :hook ((elisp-mode . flycheck-mode))
+  :init
+  (add-hook 'flycheck-mode-hook #'flycheck-haskell-setup)
+  (global-flycheck-mode)
+  )
+
+;;; Emacs Lisp Mode ;;;
+
+(use-package emacs
+  :delight
+  (emacs-lisp-mode "Elisp" :major)
+  (global-whitespace-mode nil)
+
+  :commands elisp-indent-file
+
+  :init
+  (add-hook 'emacs-lisp-mode-hook #'flycheck-mode)
+
+  :config
+  (setq-default lisp-indent-offset 2)
+  (defun eval-region-or-expression ()
+    "Evaluate a region or expression in elisp."
+    (interactive)
+    (if mark-active
+      (eval-region (region-beginning) (region-end) t)
+      (eval-last-sexp nil)))
+
+  (define-key emacs-lisp-mode-map
+    (kbd "M-RET")
+    'eval-region-or-expression)
+
+  (define-key emacs-lisp-mode-map
+    (kbd "s-<return>")
+    'eval-region-or-expression)
+
+  (defun evaluate-elisp-buffer ()
+    "Evaluate a buffer of elisp expressions."
+    (interactive)
+    (eval-buffer)
+    (message "Elisp evaluated %s" (buffer-file-name)))
+
+  (define-key
+    emacs-lisp-mode-map
+    (kbd "C-c C-l")
+    'evaluate-elisp-buffer)
+
+  (setq eldoc-minor-mode-string nil)
+  (add-hook 'emacs-lisp-mode-hook  #'eldoc-mode)
+
+  (defun elisp-indent-file ()
+    "Indent an elisp file."
+    (when (equal major-mode 'emacs-lisp-mode)
+      (indent-region (point-min) (point-max))))
+
+  (add-hook 'before-save-hook #'elisp-indent-file)
+  )
+
+;;; Json Mode ;;;
+
+(use-package json-mode
+  :after evil
+  :config (evil-set-initial-state 'json-mode 'normal))
+
+;;; Nix Mode ;;;
+
+(use-package nix-mode
+  :config (add-to-list 'auto-mode-alist '("\\.nix\\'" . nix-mode)))
+
+
+;;; Flycheck Mode ;;;
+
+(use-package flycheck-haskell
+  :commands  flycheck-haskell-setup)
+
+(use-package flycheck
+  :defer     0
+  :after     (flycheck-haskell)
+  :commands  (global-flycheck-mode flycheck-mode flycheck-add-next-checker)
+  :hook      (flycheck-mode . #'flycheck-haskell-setup)
+  :config    (global-flycheck-mode))
+
+;;; Haskell Mode ;;;
+
+;; For editing stack yaml files
+(use-package yaml-mode
+  :after evil
+  :config (evil-set-initial-state 'yaml-mode 'normal))
+
+(use-package format-all)
+
+(use-package projectile
+  :commands (projectile-mode))
+
+(use-package haskell-mode
+  ;;:after projectile
+  :after evil
+  :init
+  ;;(add-hook 'haskell-mode-hook #'projectile-mode)
+  (evil-set-initial-state 'haskell-cabal-mode 'normal)
+  :config
+  (add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
+  (remove-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
+  (add-hook 'haskell-mode-hook #'interactive-haskell-mode)
+  (setq-default haskell-indent-offset 2)
+  (setq haskell-interactive-popup-errors  nil
+    haskell-process-type              'auto
+    haskell-tags-on-save              t
+    haskell-process-args-stack-ghci   '("--ghci-options=-ferror-spans -fshow-loaded-modules"
+                                         "--no-build"
+                                         "--no-load"))
+  (add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
+  :bind
+  (:map haskell-mode-map
+    ("C-c C-l" . haskell-process-load-file)
+    ("C-c C-g" . projectile-configure-project)
+    ("C-c C-c" . projectile-compile-project)
+    ("C-`" . haskell-interactive-bring)
+    ("C-c c" . haskell-process-cabal)
+    ("C-c C-t" . haskell-process-do-type)
+    ("C-c C-i" . haskell-process-do-info)
+    ("C-c C-f" . haskell-cabal-visit-file)
+    ;; Use dante-mode to jump to def with "M-."
+    ;; ("M-]" . haskell-mode-jump-to-def-or-tag)
+    ("M-," . pop-tag-mark)
+    )
+  )
+
+(use-package dante
+  :after (haskell-mode flycheck)
+  :commands add-hlint-to-flycheck-for-dante-mode
+  :config
+  ;; Use flycheck in dante-mode
+  (add-hook 'dante-mode-hook #'flycheck-mode)
+  (defun add-hlint-to-flycheck-for-dante-mode ()
+    "Make `hlint` emit flycheck-warnings in dante-mode."
+    (flycheck-add-next-checker 'haskell-dante
+      '(warning . haskell-hlint)))
+  (add-hook 'dante-mode-hook
+    #'add-hlint-to-flycheck-for-dante-mode))
+
+;;; Customizations ;;;
+
+;; Put customizations in another file
+(setq custom-file "~/.emacs.d/custom.el")
+(load custom-file 'noerror)
+
+;; Local Variables:
+;; mode: emacs-lisp
+;; End:
+
+(provide '.emacs)
+;;; .emacs ends here
