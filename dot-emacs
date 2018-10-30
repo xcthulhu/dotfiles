@@ -1,4 +1,4 @@
-;;; .emacs -- Matthew Doty's emacs configuration
+;;; dot-emacs -- Matthew Doty's emacs configuration
 
 ;;; Commentary:
 ;;;   This is a minimal .emacs for haskell development
@@ -23,16 +23,19 @@
 ;;; Interface ;;;
 
 (fset 'yes-or-no-p 'y-or-n-p)
+
 (setq
   inhibit-startup-screen      t        ; No startup screen
   disabled-command-function   nil      ; No prompts
   ring-bell-function          'ignore  ; No error bell
   interprogram-cut-function   nil      ; No system clipboard (copy)
   interprogram-paste-function nil      ; No system clipboard (paste)
+  vc-follow-symlinks          nil      ; Always follow symlinks
   )
-(tool-bar-mode -1)                    ; No tool-bar
-(menu-bar-mode -1)                    ; No menu-bar
-(blink-cursor-mode -1)                ; No cursor blinking
+
+(tool-bar-mode -1)                     ; No tool-bar
+(menu-bar-mode -1)                     ; No menu-bar
+(blink-cursor-mode -1)                 ; No cursor blinking
 
 (when (eq system-type 'darwin)
   (setq-default
@@ -199,14 +202,8 @@
     )
   )
 
-(use-package material-theme
-  ;; :when window-system
-  :config (load-theme 'material t))
-
-;; TODO: Doesn't work on gnome-terminal ; find better theme
-;; (use-package cyberpunk-theme
-;;   :unless  window-system
-;;   :config (load-theme 'cyberpunk t))
+(use-package gruvbox-theme
+  :config (load-theme 'gruvbox-dark-medium t))
 
 ;;; Prog-Mode ;;;
 
@@ -423,7 +420,7 @@
   ;;(add-hook 'haskell-mode-hook #'projectile-mode)
   (evil-set-initial-state 'haskell-cabal-mode 'normal)
   :config
-  (add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
+  ;;(add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
   (remove-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
   (add-hook 'haskell-mode-hook #'interactive-haskell-mode)
   (setq-default haskell-indent-offset 2)
@@ -473,5 +470,5 @@
 ;; mode: emacs-lisp
 ;; End:
 
-(provide '.emacs)
-;;; .emacs ends here
+(provide 'dot-emacs)
+;;; dot-emacs ends here
