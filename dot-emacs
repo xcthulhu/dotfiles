@@ -313,16 +313,11 @@
 
 ;;; Flycheck Mode ;;;
 
-(use-package flycheck-haskell
-  :commands flycheck-haskell-setup)
-
 (use-package flycheck
   :after    flycheck-haskell
   :defer    0
   :commands (global-flycheck-mode flycheck-mode)
-  :hook ((elisp-mode . flycheck-mode))
   :init
-  (add-hook 'flycheck-mode-hook #'flycheck-haskell-setup)
   (global-flycheck-mode)
   )
 
@@ -335,8 +330,7 @@
 
   :commands elisp-indent-file
 
-  :init
-  (add-hook 'emacs-lisp-mode-hook #'flycheck-mode)
+  :hook (emacs-lisp-mode . flycheck-mode)
 
   :config
   (setq-default lisp-indent-offset 2)
@@ -413,10 +407,15 @@
 (use-package projectile
   :commands (projectile-mode))
 
+(use-package flycheck-haskell
+  :after flycheck
+  :commands flycheck-haskell-setup)
+
 (use-package haskell-mode
   ;;:after projectile
-  :after evil
+  :after (evil flycheck-haskell)
   :init
+  (add-hook 'flycheck-mode-hook #'flycheck-haskell-setup)
   ;;(add-hook 'haskell-mode-hook #'projectile-mode)
   (evil-set-initial-state 'haskell-cabal-mode 'normal)
   :config
