@@ -1,7 +1,13 @@
 { pkgs, ... }:
 let
 
-  haskellPackages = pkgs.haskell.packages.ghc843;
+  defaultHaskellPackages = pkgs.haskell.packages.ghc843;
+
+  haskellPackages = defaultHaskellPackages.override {
+    overrides = new : old : rec {
+      ghc-exactprint = pkgs.haskell.lib.dontCheck old.ghc-exactprint;
+    };
+  };
 
   # Custom Haskell packages
   hiePkgs = import (pkgs.fetchFromGitHub {
@@ -24,30 +30,28 @@ let
 
 in {
   home.packages = [
-    # Development
+    ## Development
     pkgs.gitAndTools.gitFull
     pkgs.gnumake
     pkgs.guile_2_2
+    pkgs.python36
+    pkgs.python36Packages.virtualenv
 
-    # Shell
+    ## Shell
     pkgs.ripgrep
     pkgs.jq
-    pkgs.bat
+    pkgs.tmux
     pkgs.screen
     pkgs.shfmt
 
-    # Reading
-    pkgs.calibre
-
-    # Editors
+    ## Editors
     pkgs.vim
     #pkgs.emacs26
 
-    # Haskell
-    haskellPackages.stack
+    ## Haskell
+    #haskellPackages.stack
     haskellPackages.cabal-install
     haskellPackages.ghc
-    haskellPackages.hoogle
     haskellPackages.stylish-haskell
     haskellPackages.hlint
     haskellPackages.brittany
@@ -58,17 +62,34 @@ in {
     #snack.snack-exe
     #haskellPackages.ghc-mod
 
-    # Math
-    pkgs.isabelle
-    #pkgs.z3
+    ## Math
+    pkgs.z3
 
-    # LaTeX
+    ## LaTeX
     pkgs.texlive.combined.scheme-small
+    ]
+    ++ (if (! pkgs.stdenv.isDarwin)
+      ## Linux only packages
+      then [
+      ## Shell
+      pkgs.bat
 
-    # Command Line Utilities
-    pkgs.xclip
-    pkgs.tmux
-  ];
+      ## Reading
+      pkgs.calibre
+
+      ## Haskell
+      haskellPackages.hoogle
+
+      ## Math
+      pkgs.isabelle
+
+      ## Command Line Utilities
+      pkgs.xclip
+      ]
+
+      ## OS X only packages
+      else [])
+    ;
 
   programs.home-manager = {
     enable = true;
