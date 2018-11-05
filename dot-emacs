@@ -1,7 +1,8 @@
 ;;; dot-emacs -- Matthew Doty's emacs configuration
 
 ;;; Commentary:
-;;;   This is a minimal .emacs for haskell development
+;;;   This .emacs is intended to download all dependencies if
+;;;  ~/.emacs.d is ever deleted
 
 ;;; Code:
 
@@ -404,15 +405,11 @@
 
 (use-package format-all)
 
-(use-package projectile
-  :commands (projectile-mode))
-
 (use-package flycheck-haskell
   :after flycheck
   :commands flycheck-haskell-setup)
 
 (use-package haskell-mode
-  ;;:after projectile
   :after (evil flycheck-haskell)
   :init
   (add-hook 'flycheck-mode-hook #'flycheck-haskell-setup)
@@ -446,18 +443,19 @@
     )
   )
 
+(use-package projectile
+  :commands (projectile-mode))
+
 (use-package dante
   :after (haskell-mode flycheck)
   :commands add-hlint-to-flycheck-for-dante-mode
   :config
   ;; Use flycheck in dante-mode
   (add-hook 'dante-mode-hook #'flycheck-mode)
-  (defun add-hlint-to-flycheck-for-dante-mode ()
-    "Make `hlint` emit flycheck-warnings in dante-mode."
-    (flycheck-add-next-checker 'haskell-dante
-      '(warning . haskell-hlint)))
-  (add-hook 'dante-mode-hook
-    #'add-hlint-to-flycheck-for-dante-mode))
+  (flycheck-add-next-checker 'haskell-dante
+    '(warning . haskell-hlint)))
+
+(use-package intero)
 
 ;;; Customizations ;;;
 
