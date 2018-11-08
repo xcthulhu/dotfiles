@@ -5,7 +5,11 @@ let
 
   haskellPackages = defaultHaskellPackages.override {
     overrides = new : old : rec {
-      ghc-exactprint = pkgs.haskell.lib.dontCheck old.ghc-exactprint;
+      ghc-exactprint =
+        if (pkgs.stdenv.isDarwin) then
+          pkgs.haskell.lib.dontCheck old.ghc-exactprint
+        else
+          old.ghc-exactprint;
     };
   };
 
@@ -24,18 +28,18 @@ let
     sha256 = "0w6gliidknnyv6jlk8533lvji4v6icsq6y1zywfbj9q1xsqw3mx2";
   });
 
-  # TODO: Make custom derivation for latest shfmt
-  # - https://github.com/mvdan/sh/tree/v2.5.1
-  # - https://github.com/NixOS/nixpkgs/blob/master/pkgs/tools/text/shfmt/default.nix
-
 in {
   home.packages = [
     ## Development
     pkgs.gitAndTools.gitFull
     pkgs.gnumake
     pkgs.guile_2_2
+    pkgs.rustup
+
+    ## Python
     pkgs.python36
     pkgs.python36Packages.virtualenv
+    pkgs.python36Packages.ipython
 
     ## Shell
     pkgs.ripgrep
@@ -43,13 +47,13 @@ in {
     pkgs.tmux
     pkgs.screen
     pkgs.shfmt
+    pkgs.shellcheck
 
     ## Editors
     pkgs.vim
     #pkgs.emacs26
 
     ## Haskell
-    #haskellPackages.stack
     haskellPackages.cabal-install
     haskellPackages.ghc
     haskellPackages.stylish-haskell
@@ -68,9 +72,9 @@ in {
     ## LaTeX
     pkgs.texlive.combined.scheme-small
     ]
-    ++ (if (! pkgs.stdenv.isDarwin)
+    ++ (if (pkgs.stdenv.isLinux) then [
       ## Linux only packages
-      then [
+
       ## Shell
       pkgs.bat
 
@@ -78,6 +82,7 @@ in {
       pkgs.calibre
 
       ## Haskell
+      haskellPackages.stack
       haskellPackages.hoogle
 
       ## Math
@@ -85,11 +90,7 @@ in {
 
       ## Command Line Utilities
       pkgs.xclip
-      ]
-
-      ## OS X only packages
-      else [])
-    ;
+      ] else []);
 
   programs.home-manager = {
     enable = true;
