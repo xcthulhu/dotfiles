@@ -131,6 +131,27 @@
       (goto-line ffap-file-at-point-line-number)
       (setq ffap-file-at-point-line-number nil)))
 
+  ;; Run git blame at point and put result in message buffer
+  ;; https://jayconrod.com/posts/67/emacs--run-git-blame-on-the-current-line
+  (defun git-blame ()
+    "Runs `git blame` on the current line and adds the commit id to the kill ring"
+    (interactive)
+    (let* ((line-number (save-excursion (goto-char (point-at-bol)) (+ 1 (count-lines 1 (point)))))
+            (line-arg (format "%d,%d" line-number line-number))
+            (commit-buf (generate-new-buffer "*git-blame-line-commit*")))
+      (call-process "git" nil commit-buf nil "blame" "-L" line-arg "--" (buffer-file-name))
+      (let* ((commit-id (with-current-buffer commit-buf (buffer-substring 1 9))))
+        (kill-new commit-id)
+        (if (string= "00000000" commit-id)
+          (message "Not Committed Yet")
+          (let* ((log-buf (generate-new-buffer "*git-blame-line-log*")))
+            (call-process "git" nil log-buf nil "log" "-1" "--pretty=%h   %an   %s" commit-id)
+            (with-current-buffer log-buf (message "Line %d: %s" line-number (buffer-string)))
+            (kill-buffer log-buf)))
+        (kill-buffer commit-buf))))
+
+  (define-key global-map (kbd "C-c C-b") 'git-blame)
+
   ;; Eshell
   (defun eshell/open (file)
     "Eshell command to open a FILE or FILES."
