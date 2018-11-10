@@ -1,3 +1,4 @@
+# -*- mode: sh; -*-
 # ~/.bashrc: executed by bash(1) for non-login shells.
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
@@ -123,7 +124,3 @@ if [ -f ~/.cargo/env ]; then
   # shellcheck source=/dev/null
   . ~/.cargo/env
 fi
-
-# Local Variables:
-# mode: sh
-# End:
