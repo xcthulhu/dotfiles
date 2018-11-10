@@ -1,4 +1,4 @@
-;;; .emacs -- Matthew Doty's emacs configuration   -*- lexical-binding: t; -*-
+;;; .emacs -- Matthew Doty's emacs configuration   -*- mode: emacs-lisp; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;;;   This .emacs is intended to download all dependencies if
@@ -56,7 +56,55 @@
   (require 'uniquify)
   (setq uniquify-buffer-name-style 'reverse)
 
+  ;; Scratch buffer
+  (setq initial-scratch-message "")
+
+  ;; Autoformat
+
+  (require 'cl)
+  (defun smart-buffer-region-format (format-region-fn)
+    "Format the current region using the provided FORMAT-REGION-FN.
+     If no region is selected then format the current buffer."
+    (let ((original-point (point)))
+      (if mark-active
+        (let ((buffer-size-init (buffer-size))
+               (start (region-beginning))
+               (end (region-end))
+               deactivate-mark)
+          (funcall format-region-fn start end)
+          (let ((new-end (+ end (- (buffer-size) buffer-size-init))))
+            (destructuring-bind (new-point . new-region-far-end)
+              (if (eq end original-point)
+                (cons new-end start)
+                (cons start new-end))
+              (set-mark new-region-far-end)
+              (goto-char new-point)))
+          (activate-mark))
+        (progn
+          (funcall format-region-fn (point-min) (point-max))
+          (goto-char original-point)
+          (message "Formatted file %s" (buffer-file-name))))))
+
+  (defun ensure-list (x) (if (listp x) x (list x)))
+
+  (defun smart-mode-buffer-region-format (modes format-region-fn)
+    (when (memq major-mode (ensure-list modes)) (smart-buffer-region-format format-region-fn)))
+
   ;; Elisp
+  (setq-default lisp-indent-offset 2)
+
+  (defun elisp-format ()
+    "Format a region of elisp code or the entire buffer if there is no selection."
+    (interactive)
+    (smart-mode-buffer-region-format '(lisp-interaction-mode emacs-lisp-mode) #'indent-region))
+  (define-key emacs-lisp-mode-map (kbd "C-c C-f") #'elisp-format)
+  (define-key lisp-interaction-mode-map (kbd "C-c C-f") #'elisp-format)
+
+  (defun elisp-format-buffer ()
+    "Indent an elisp buffer."
+    (when (equal major-mode 'emacs-lisp-mode)
+      (indent-region (point-min) (point-max))))
+  (add-hook 'before-save-hook #'elisp-format-buffer)
 
   (defun elisp/eval-region-or-last-expression ()
     "Evaluate a region or expression in elisp."
@@ -65,7 +113,9 @@
       (eval-region (region-beginning) (region-end) t)
       (eval-last-sexp nil)))
   (define-key emacs-lisp-mode-map (kbd "M-RET") #'elisp/eval-region-or-last-expression)
+  (define-key lisp-interaction-mode-map (kbd "M-RET") #'elisp/eval-region-or-last-expression)
   (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp/eval-region-or-last-expression)
+  (define-key lisp-interaction-mode-map (kbd "s-<return>") #'elisp/eval-region-or-last-expression)
 
   (defun elisp/evaluate-buffer ()
     "Evaluate a buffer of elisp expressions."
@@ -73,45 +123,59 @@
     (eval-buffer)
     (message "Elisp evaluated %s" (buffer-file-name)))
   (define-key emacs-lisp-mode-map (kbd "C-c C-l") #'elisp/evaluate-buffer)
-
-  ;; Autoformatting
-  (setq-default lisp-indent-offset 2)
-
-  (defun elisp-format ()
-    "Format a region of elisp code or the entire buffer if there is no selection."
-    (interactive)
-    (when (equal major-mode 'emacs-lisp-mode)
-      (if mark-active
-        ;; Based on - https://emacs.stackexchange.com/a/34900
-        (let ((buffer-size-init (buffer-size))
-               (start (region-beginning))
-               (end (region-end))
-               deactivate-mark)
-          (indent-region start end)
-          (setq end (+ end (- (buffer-size) buffer-size-init)))
-          (set-mark start)
-          (goto-char end)
-          (activate-mark)
-          ;; needed for evil line mode
-          (defvar evil-state)
-          (defvar evil-visual-line)
-          (when (and (string= evil-state "visual")
-                  (eq (evil-visual-type) evil-visual-line))
-            (evil-visual-select start end 'line)))
-        (progn
-          (indent-region (point-min) (point-max))
-          (message "Formatted file %s" (buffer-file-name))))))
-  (define-key emacs-lisp-mode-map (kbd "C-c C-f") #'elisp-format)
-
-  (defun elisp-format-buffer ()
-    "Indent an elisp buffer."
-    (when (equal major-mode 'emacs-lisp-mode)
-      (indent-region (point-min) (point-max))))
-  (add-hook 'before-save-hook #'elisp-format-buffer)
+  (define-key lisp-interaction-mode-map (kbd "C-c C-l") #'elisp/evaluate-buffer)
 
   ;; Eldoc mode
   (setq eldoc-minor-mode-string nil)
   (add-hook 'emacs-lisp-mode-hook  #'eldoc-mode)
+
+  ;; Shell scripting
+  (require 'sh-script)
+
+  (setq sh-basic-offset 2)
+  (defconst sh/format-cmd "shfmt -i 2")
+
+  ;; TODO: Preserve window position
+  ;; TODO: Check if shfmt exists
+  ;; TODO: Check if shfmt exited properly
+  ;; TODO: Check if leading whitespace
+  ;; TODO: Preserve region trailing whitespace
+  (defun sh-format ()
+    "Format a region of shell commands or the entire buffer if there is no selection."
+    (interactive)
+    (smart-mode-buffer-region-format
+      'sh-mode
+      (lambda (start end)
+        (shell-command-on-region start end sh/format-cmd (buffer-name) t))))
+  (define-key sh-mode-map (kbd "C-c C-f") #'sh-format)
+
+  (defun sh-format-buffer ()
+    "Format a buffer of shell commands."
+    (when (equal major-mode 'sh-mode)
+      (let ((original-point (point)))
+        (shell-command-on-region (point-min) (point-max) sh/format-cmd (buffer-name) t)
+        (goto-char original-point))))
+  (add-hook 'before-save-hook #'sh-format-buffer)
+
+  ;; Eshell
+  (defun eshell/open (file)
+    "Eshell command to open a FILE."
+    (find-file file))
+  (defun eshell/openo (file)
+    "Eshell command to open a FILE in another window."
+    (find-file-other-window file))
+  (defun eshell/bat (file)
+    "Eshell command to open a FILE (read only)."
+    (find-file-read-only-other-window file))
+  (defun eshell/emacs (file)
+    "Hack EMACS to just open a FILE in eshell."
+    (eshell/open file))
+  (defun eshell/less (file)
+    "Hack less to open a FILE (read only)."
+    (eshell/bat file))
+  (defun eshell/more (file)
+    "Hack more to open a FILE (read only)."
+    (eshell/bat file))
 
   ;; Ido mode
   (ido-mode t)
@@ -170,71 +234,6 @@
         (kill-buffer commit-buf))))
 
   (define-key global-map (kbd "C-c C-b") 'git-blame)
-
-  ;; Eshell
-  (defun eshell/open (file)
-    "Eshell command to open a FILE."
-    (find-file file))
-  (defun eshell/openo (file)
-    "Eshell command to open a FILE in another window."
-    (find-file-other-window file))
-  (defun eshell/bat (file)
-    "Eshell command to open a FILE (read only)."
-    (find-file-read-only-other-window file))
-  (defun eshell/emacs (file)
-    "Hack EMACS to just open a FILE in eshell."
-    (eshell/open file))
-  (defun eshell/less (file)
-    "Hack less to open a FILE (read only)."
-    (eshell/bat file))
-  (defun eshell/more (file)
-    "Hack more to open a FILE (read only)."
-    (eshell/bat file))
-
-  ;; shell scripting
-  (require 'sh-script)
-
-  (setq sh-basic-offset 2)
-  (defconst sh/format-cmd "shfmt -i 2")
-
-  (defun sh-format ()
-    "Format a region of shell commands or the entire buffer if there is no selection."
-    (interactive)
-    (when (equal major-mode 'sh-mode)
-      (if mark-active
-        ;; Based on - https://emacs.stackexchange.com/a/34900
-        (let ((buffer-size-init (buffer-size))
-               (start (region-beginning))
-               (end (region-end))
-               deactivate-mark)
-          (shell-command-on-region start end sh/format-cmd (buffer-name) t)
-          (setq end (+ end (- (buffer-size) buffer-size-init)))
-          (set-mark start)
-          (goto-char end)
-          (activate-mark)
-          ;; needed for evil line mode
-          (defvar evil-state)
-          (defvar evil-visual-line)
-          (when (and (string= evil-state "visual")
-                  (eq (evil-visual-type) evil-visual-line))
-            (evil-visual-select start end 'line)))
-        (let ((original-point (point)))
-          (indent-region (point-min) (point-max))
-          (goto-char original-point)
-          (message "Formatted file %s" (buffer-file-name))))))
-  (define-key sh-mode-map (kbd "C-c C-f") #'sh-format)
-
-  (defun sh-format-buffer ()
-    "Format a buffer of shell commands."
-    (when (equal major-mode 'sh-mode)
-      (let ((original-point (point))
-             (original-window-start (window-start))
-             (original-window-end (window-end)))
-        (shell-command-on-region (point-min) (point-max) sh/format-cmd (buffer-name) t)
-        (goto-char original-point)
-        (set-window-start original-window-start)
-        (set-window-end original-window-end))))
-  (add-hook 'before-save-hook #'sh-format-buffer)
 
   ;; Window System Configuration
   (when window-system
@@ -449,7 +448,7 @@
 
 ;;; Flycheck Mode ;;;
 (use-package flycheck
-  :commands (global-flycheck-mode flycheck-mode)
+  :commands (global-flycheck-mode flycheck-mode flycheck-add-next-checker)
   :config   (global-flycheck-mode)
   :hook     ((emacs-lisp-mode . flycheck-mode)
               (sh-mode . flycheck-mode)))
@@ -502,16 +501,11 @@
 (use-package dante
   :after flycheck
   :config
-  (flycheck-add-next-checker 'haskell-dante
-    '(warning . haskell-hlint))
+  (flycheck-add-next-checker 'haskell-dante '(warning . haskell-hlint))
   :hook (dante-mode . flycheck-mode)
   )
 
 (use-package intero)
 
-;; Local Variables:
-;; mode: emacs-lisp
-;; End:
-
 (provide 'dot-emacs)
-;;; .emacs ends here
+;;; dot-emacs ends here
