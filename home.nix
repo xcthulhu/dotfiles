@@ -34,7 +34,6 @@ in {
     pkgs.gitAndTools.gitFull
     pkgs.gnumake
     pkgs.guile_2_2
-    pkgs.rustup
 
     ## Python
     pkgs.python36
