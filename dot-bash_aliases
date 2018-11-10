@@ -1,12 +1,15 @@
-if command -v vim > /dev/null ; then
+# -*- mode: sh; -*-
+# ~/.bash_aliases: aliases set by ~/.bashrc
+
+if command -v vim >/dev/null; then
   alias vi=vim
 fi
 
-if command -v emacs > /dev/null ; then
+if command -v emacs >/dev/null; then
   alias emacs="emacs -nw"
 fi
 
-if command -v xclip > /dev/null ; then
+if command -v xclip >/dev/null; then
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
 fi
