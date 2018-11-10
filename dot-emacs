@@ -1,4 +1,4 @@
-;;; dot-emacs -- Matthew Doty's emacs configuration
+;;; .emacs -- Matthew Doty's emacs configuration   -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;;;   This .emacs is intended to download all dependencies if
@@ -57,42 +57,61 @@
   (setq uniquify-buffer-name-style 'reverse)
 
   ;; Elisp
-  (setq-default lisp-indent-offset 2)
-  (defun eval-region-or-expression ()
+
+  (defun elisp/eval-region-or-last-expression ()
     "Evaluate a region or expression in elisp."
     (interactive)
     (if mark-active
       (eval-region (region-beginning) (region-end) t)
       (eval-last-sexp nil)))
+  (define-key emacs-lisp-mode-map (kbd "M-RET") #'elisp/eval-region-or-last-expression)
+  (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp/eval-region-or-last-expression)
 
-  (define-key emacs-lisp-mode-map
-    (kbd "M-RET")
-    'eval-region-or-expression)
-
-  (define-key emacs-lisp-mode-map
-    (kbd "s-<return>")
-    'eval-region-or-expression)
-
-  (defun evaluate-elisp-buffer ()
+  (defun elisp/evaluate-buffer ()
     "Evaluate a buffer of elisp expressions."
     (interactive)
     (eval-buffer)
     (message "Elisp evaluated %s" (buffer-file-name)))
+  (define-key emacs-lisp-mode-map (kbd "C-c C-l") #'elisp/evaluate-buffer)
 
-  (define-key
-    emacs-lisp-mode-map
-    (kbd "C-c C-l")
-    'evaluate-elisp-buffer)
+  ;; Autoformatting
+  (setq-default lisp-indent-offset 2)
 
-  (setq eldoc-minor-mode-string nil)
-  (add-hook 'emacs-lisp-mode-hook  #'eldoc-mode)
+  (defun elisp-format ()
+    "Format a region of elisp code or the entire buffer if there is no selection."
+    (interactive)
+    (when (equal major-mode 'emacs-lisp-mode)
+      (if mark-active
+        ;; Based on - https://emacs.stackexchange.com/a/34900
+        (let ((buffer-size-init (buffer-size))
+               (start (region-beginning))
+               (end (region-end))
+               deactivate-mark)
+          (indent-region start end)
+          (setq end (+ end (- (buffer-size) buffer-size-init)))
+          (set-mark start)
+          (goto-char end)
+          (activate-mark)
+          ;; needed for evil line mode
+          (defvar evil-state)
+          (defvar evil-visual-line)
+          (when (and (string= evil-state "visual")
+                  (eq (evil-visual-type) evil-visual-line))
+            (evil-visual-select start end 'line)))
+        (progn
+          (indent-region (point-min) (point-max))
+          (message "Formatted file %s" (buffer-file-name))))))
+  (define-key emacs-lisp-mode-map (kbd "C-c C-f") #'elisp-format)
 
-  (defun elisp-indent-file ()
-    "Indent an elisp file."
+  (defun elisp-format-buffer ()
+    "Indent an elisp buffer."
     (when (equal major-mode 'emacs-lisp-mode)
       (indent-region (point-min) (point-max))))
+  (add-hook 'before-save-hook #'elisp-format-buffer)
 
-  (add-hook 'before-save-hook #'elisp-indent-file)
+  ;; Eldoc mode
+  (setq eldoc-minor-mode-string nil)
+  (add-hook 'emacs-lisp-mode-hook  #'eldoc-mode)
 
   ;; Ido mode
   (ido-mode t)
@@ -122,8 +141,8 @@
               (and line-number-string
                 (string-to-number line-number-string))))
       (if (and line-number (> line-number 0))
-        (setq ffap-file-at-point-line-number line-number)
-        (setq ffap-file-at-point-line-number nil))))
+        (setq ffap-file-at-point-line-number line-number
+          ffap-file-at-point-line-number nil))))
 
   (defadvice find-file-at-point (after ffap-goto-line-number activate)
     "If `ffap-file-at-point-line-number' is non-nil goto this line."
@@ -154,23 +173,68 @@
 
   ;; Eshell
   (defun eshell/open (file)
-    "Eshell command to open a FILE or FILES."
+    "Eshell command to open a FILE."
     (find-file file))
   (defun eshell/openo (file)
-    "Eshell command to open a FILE or FILES in another window."
+    "Eshell command to open a FILE in another window."
     (find-file-other-window file))
   (defun eshell/bat (file)
-    "Eshell command to open a FILE or FILES (read only)."
+    "Eshell command to open a FILE (read only)."
     (find-file-read-only-other-window file))
-  (defun eshell/emacs (file &rest files)
-    "Hack EMACS to just open a FILE or FILES in eshell."
-    (apply #'eshell/open (cons file files)))
-  (defun eshell/less (file &rest files)
-    "Hack less to open a FILE or FILES (read only)."
-    (apply #'eshell/bat (cons file files)))
-  (defun eshell/more (file &rest files)
-    "Hack more to open a FILE or FILES (read only)."
-    (apply #'eshell/bat (cons file files)))
+  (defun eshell/emacs (file)
+    "Hack EMACS to just open a FILE in eshell."
+    (eshell/open file))
+  (defun eshell/less (file)
+    "Hack less to open a FILE (read only)."
+    (eshell/bat file))
+  (defun eshell/more (file)
+    "Hack more to open a FILE (read only)."
+    (eshell/bat file))
+
+  ;; shell scripting
+  (require 'sh-script)
+
+  (setq sh-basic-offset 2)
+  (defconst sh/format-cmd "shfmt -i 2")
+
+  (defun sh-format ()
+    "Format a region of shell commands or the entire buffer if there is no selection."
+    (interactive)
+    (when (equal major-mode 'sh-mode)
+      (if mark-active
+        ;; Based on - https://emacs.stackexchange.com/a/34900
+        (let ((buffer-size-init (buffer-size))
+               (start (region-beginning))
+               (end (region-end))
+               deactivate-mark)
+          (shell-command-on-region start end sh/format-cmd (buffer-name) t)
+          (setq end (+ end (- (buffer-size) buffer-size-init)))
+          (set-mark start)
+          (goto-char end)
+          (activate-mark)
+          ;; needed for evil line mode
+          (defvar evil-state)
+          (defvar evil-visual-line)
+          (when (and (string= evil-state "visual")
+                  (eq (evil-visual-type) evil-visual-line))
+            (evil-visual-select start end 'line)))
+        (let ((original-point (point)))
+          (indent-region (point-min) (point-max))
+          (goto-char original-point)
+          (message "Formatted file %s" (buffer-file-name))))))
+  (define-key sh-mode-map (kbd "C-c C-f") #'sh-format)
+
+  (defun sh-format-buffer ()
+    "Format a buffer of shell commands."
+    (when (equal major-mode 'sh-mode)
+      (let ((original-point (point))
+             (original-window-start (window-start))
+             (original-window-end (window-end)))
+        (shell-command-on-region (point-min) (point-max) sh/format-cmd (buffer-name) t)
+        (goto-char original-point)
+        (set-window-start original-window-start)
+        (set-window-end original-window-end))))
+  (add-hook 'before-save-hook #'sh-format-buffer)
 
   ;; Window System Configuration
   (when window-system
@@ -328,7 +392,7 @@
 ;;; Git ;;;
 
 (use-package magit
-  :bind ("C-c g" . magit-status)
+  :bind ("C-c C-g" . magit-status)
   )
 
 (use-package git-gutter
