@@ -57,7 +57,6 @@ in {
 
     ## Editors
     pkgs.vim
-    #pkgs.emacs26
 
     ## Haskell
     haskellPackages.cabal-install
@@ -67,6 +66,7 @@ in {
     haskellPackages.brittany
     haskellPackages.ghcid
     haskellPackages.hasktags
+    haskellPackages.hoogle
 
     #hiePkgs.hie84
     #snack.snack-exe
