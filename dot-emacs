@@ -106,24 +106,24 @@
       (indent-region (point-min) (point-max))))
   (add-hook 'before-save-hook #'elisp-format-buffer)
 
-  (defun elisp/eval-region-or-last-expression ()
+  (defun elisp-eval-region-or-last-expression ()
     "Evaluate a region or expression in elisp."
     (interactive)
     (if mark-active
       (eval-region (region-beginning) (region-end) t)
       (eval-last-sexp nil)))
-  (define-key emacs-lisp-mode-map (kbd "M-RET") #'elisp/eval-region-or-last-expression)
-  (define-key lisp-interaction-mode-map (kbd "M-RET") #'elisp/eval-region-or-last-expression)
-  (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp/eval-region-or-last-expression)
-  (define-key lisp-interaction-mode-map (kbd "s-<return>") #'elisp/eval-region-or-last-expression)
+  (define-key emacs-lisp-mode-map (kbd "M-RET") #'elisp-eval-region-or-last-expression)
+  (define-key lisp-interaction-mode-map (kbd "M-RET") #'elisp-eval-region-or-last-expression)
+  (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
+  (define-key lisp-interaction-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
 
-  (defun elisp/evaluate-buffer ()
+  (defun elisp-evaluate-buffer ()
     "Evaluate a buffer of elisp expressions."
     (interactive)
     (eval-buffer)
     (message "Elisp evaluated %s" (buffer-file-name)))
-  (define-key emacs-lisp-mode-map (kbd "C-c C-l") #'elisp/evaluate-buffer)
-  (define-key lisp-interaction-mode-map (kbd "C-c C-l") #'elisp/evaluate-buffer)
+  (define-key emacs-lisp-mode-map (kbd "C-c C-l") #'elisp-evaluate-buffer)
+  (define-key lisp-interaction-mode-map (kbd "C-c C-l") #'elisp-evaluate-buffer)
 
   ;; Eldoc mode
   (setq eldoc-minor-mode-string nil)
@@ -133,7 +133,7 @@
   (require 'sh-script)
 
   (setq sh-basic-offset 2)
-  (defconst sh/format-cmd "shfmt -i 2")
+  (defconst sh-format-cmd (format "shfmt -i %d" sh-basic-offset))
 
   ;; TODO: Preserve window position
   ;; TODO: Check if shfmt exists
@@ -146,14 +146,14 @@
     (smart-mode-buffer-region-format
       'sh-mode
       (lambda (start end)
-        (shell-command-on-region start end sh/format-cmd (buffer-name) t))))
+        (shell-command-on-region start end sh-format-cmd (buffer-name) t))))
   (define-key sh-mode-map (kbd "C-c C-f") #'sh-format)
 
   (defun sh-format-buffer ()
     "Format a buffer of shell commands."
     (when (equal major-mode 'sh-mode)
       (let ((original-point (point)))
-        (shell-command-on-region (point-min) (point-max) sh/format-cmd (buffer-name) t)
+        (shell-command-on-region (point-min) (point-max) sh-format-cmd (buffer-name) t)
         (goto-char original-point))))
   (add-hook 'before-save-hook #'sh-format-buffer)
 
@@ -216,22 +216,30 @@
 
   ;; Run git blame at point and put result in message buffer
   ;; https://jayconrod.com/posts/67/emacs--run-git-blame-on-the-current-line
+  (defun chomp-end (string)
+    "Chomp tailing whitespace from STRING."
+    (replace-regexp-in-string (rx (* (any " \t\n")) eos) "" string))
+
   (defun git-blame ()
-    "Runs `git blame` on the current line and adds the commit id to the kill ring"
+    "Runs `git blame` on the current line and writes the result to the message buffer."
     (interactive)
     (let* ((line-number (save-excursion (goto-char (point-at-bol)) (+ 1 (count-lines 1 (point)))))
             (line-arg (format "%d,%d" line-number line-number))
-            (commit-buf (generate-new-buffer "*git-blame-line-commit*")))
-      (call-process "git" nil commit-buf nil "blame" "-L" line-arg "--" (buffer-file-name))
-      (let* ((commit-id (with-current-buffer commit-buf (buffer-substring 1 9))))
-        (kill-new commit-id)
-        (if (string= "00000000" commit-id)
-          (message "Not Committed Yet")
-          (let* ((log-buf (generate-new-buffer "*git-blame-line-log*")))
-            (call-process "git" nil log-buf nil "log" "-1" "--pretty=%h   %an   %s" commit-id)
-            (with-current-buffer log-buf (message "Line %d: %s" line-number (buffer-string)))
-            (kill-buffer log-buf)))
-        (kill-buffer commit-buf))))
+            (current-file-name (buffer-file-name))
+            (commit-buf (generate-new-buffer "*git-blame-line-commit*"))
+            (commit-id (unwind-protect
+                         (with-current-buffer commit-buf
+                           (call-process "git" nil commit-buf nil "blame" "-L" line-arg "--" current-file-name)
+                           (buffer-substring 1 9))
+                         (kill-buffer commit-buf))))
+      (if (string= "00000000" commit-id)
+        (message "Not Committed Yet")
+        (let* ((log-buf (generate-new-buffer "*git-blame-line-log*")))
+          (unwind-protect
+            (with-current-buffer log-buf
+              (call-process "git" nil log-buf nil "log" "-1" "--pretty=%h   %an   %s" commit-id)
+              (message "Line %d: %s" line-number (chomp-end (buffer-string))))
+            (kill-buffer log-buf))))))
 
   (define-key global-map (kbd "C-c C-b") 'git-blame)
 
@@ -342,10 +350,11 @@
   :hook (prog-mode . company-mode)
   :config
   (setq
-    company-tooltip-limit  20                      ; bigger popup window
-    company-idle-delay     .3                      ; decrease delay before autocompletion popup shows
-    company-echo-delay     0                       ; remove annoying blinking
-    company-begin-commands '(self-insert-command)  ; start autocompletion only after typing
+    company-tooltip-limit             20                      ; bigger popup window
+    company-idle-delay                .3                      ; decrease delay before autocompletion popup shows
+    company-echo-delay                0                       ; remove annoying blinking
+    company-begin-commands            '(self-insert-command)  ; start autocompletion only after typing
+    company-tooltip-align-annotations t
     ))
 
 (use-package rainbow-delimiters
@@ -506,6 +515,23 @@
   )
 
 (use-package intero)
+
+;;; Rust Mode ;;;
+(use-package toml-mode
+  :after evil
+  :config (evil-set-initial-state 'toml-mode 'normal) )
+
+(use-package racer)
+
+(use-package rust-mode
+  :after racer
+  :hook ((rust-mode . racer-mode)
+          (rust-mode . eldoc-mode))
+  :bind (:map rust-mode-map
+          ("TAB" . company-indent-or-complete-common))
+  :config
+  (setq rust-format-on-save t)
+  )
 
 (provide 'dot-emacs)
 ;;; dot-emacs ends here
