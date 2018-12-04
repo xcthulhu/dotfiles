@@ -67,7 +67,7 @@ unset color_prompt force_color_prompt
 # If this is an xterm set the title to user@host:dir
 case "$TERM" in
   xterm* | rxvt*)
-    PS1='\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1'
+    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
     ;;
 esac
 
@@ -104,9 +104,9 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 # ~/.bash_aliases, instead of adding them here directly.
 # See /usr/share/doc/bash-doc/examples in the bash-doc package.
 
-if [ -f ~/.bash_aliases ]; then
+if [ -f "$HOME/.bash_aliases" ]; then
   # shellcheck source=/dev/null
-  . ~/.bash_aliases
+  . "$HOME/.bash_aliases"
 fi
 
 # enable programmable completion features (you don't need to enable
@@ -120,7 +120,12 @@ if ! shopt -oq posix; then
   fi
 fi
 
-if [ -f ~/.cargo/env ]; then
+if [ -f "$HOME/.cargo/env" ]; then
   # shellcheck source=/dev/null
-  . ~/.cargo/env
+  . "$HOME/.cargo/env"
+fi
+
+if [ -d "$HOME/Isabelle/bin" ]; then
+  # shellcheck source=/dev/null
+  export PATH="$HOME/Isabelle/bin:$PATH"
 fi
