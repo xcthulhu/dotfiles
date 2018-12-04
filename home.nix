@@ -32,8 +32,14 @@ in {
   home.packages = [
     ## Development
     pkgs.gitAndTools.gitFull
+    pkgs.mercurial
     pkgs.gnumake
     pkgs.guile_2_2
+
+    ## Database
+    pkgs.postgresql
+    pkgs.flyway
+    pkgs.pg_tmp
 
     ## Python
     pkgs.python36
@@ -47,6 +53,7 @@ in {
     pkgs.screen
     pkgs.shfmt
     pkgs.shellcheck
+    pkgs.bat
 
     ## Editors
     pkgs.vim
@@ -73,19 +80,11 @@ in {
     ]
     ++ (if (pkgs.stdenv.isLinux) then [
       ## Linux only packages
-
-      ## Shell
-      pkgs.bat
-
       ## Reading
       pkgs.calibre
 
       ## Haskell
       haskellPackages.stack
-      haskellPackages.hoogle
-
-      ## Math
-      pkgs.isabelle
 
       ## Command Line Utilities
       pkgs.xclip
