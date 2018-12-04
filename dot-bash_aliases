@@ -13,3 +13,7 @@ if command -v xclip >/dev/null; then
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
 fi
+
+if [ -x /snap/intellij-idea-community/current/bin/idea.sh ]; then
+  alias idea='/snap/intellij-idea-community/current/bin/idea.sh'
+fi
