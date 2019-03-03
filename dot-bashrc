@@ -129,6 +129,5 @@ if [ -f "$HOME/.cargo/env" ]; then
 fi
 
 if [ -d "$HOME/Isabelle/bin" ]; then
-  # shellcheck source=/dev/null
   export PATH="$HOME/Isabelle/bin:$PATH"
 fi
