@@ -59,8 +59,15 @@
   ;; Scratch buffer
   (setq initial-scratch-message "")
 
-  ;; Autoformat
+  ;; Commenting
+  (defun smart-comment-region-function ()
+    "Comment the current region.  If no region is selected then format the current buffer."
+    (interactive)
+    (if mark-active
+      (comment-or-uncomment-region (region-beginning) (region-end))
+      (comment-or-uncomment-region (line-beginning-position) (line-end-position))))
 
+  ;; Autoformat
   (require 'cl)
   (defun smart-buffer-region-format (format-region-fn)
     "Format the current region using the provided FORMAT-REGION-FN.
@@ -116,6 +123,8 @@
   (define-key lisp-interaction-mode-map (kbd "M-RET") #'elisp-eval-region-or-last-expression)
   (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
   (define-key lisp-interaction-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
+  (define-key emacs-lisp-mode-map (kbd "M-;") #'smart-comment-region-function)
+  (define-key lisp-interaction-mode-map (kbd "M-;") #'smart-comment-region-function)
 
   (defun elisp-evaluate-buffer ()
     "Evaluate a buffer of elisp expressions."
@@ -161,15 +170,18 @@
   (defun eshell/open (file)
     "Eshell command to open a FILE."
     (find-file file))
+  (defun eshell/emacs (file)
+    "Hack EMACS to just open a FILE in eshell."
+    (eshell/open file))
+  (defun eshell/vi (file)
+    "Hack VI to just open a FILE in eshell."
+    (eshell/open file))
   (defun eshell/openo (file)
     "Eshell command to open a FILE in another window."
     (find-file-other-window file))
   (defun eshell/bat (file)
     "Eshell command to open a FILE (read only)."
     (find-file-read-only-other-window file))
-  (defun eshell/emacs (file)
-    "Hack EMACS to just open a FILE in eshell."
-    (eshell/open file))
   (defun eshell/less (file)
     "Hack less to open a FILE (read only)."
     (eshell/bat file))
@@ -247,7 +259,7 @@
   (when window-system
 
     ;; Transparency
-    (set-frame-parameter (selected-frame) 'alpha '(95 95))
+    ;;(set-frame-parameter (selected-frame) 'alpha '(95 95))
 
     ;; Font Ligatures for OS X
     (when (fboundp 'mac-auto-operator-composition-mode)
@@ -274,10 +286,10 @@
       (global-set-key (kbd "s-a")              'mark-whole-buffer)       ; Select all
 
       ;; Searching
-      (global-set-key (kbd "s-f")              'isearch-forward)         ; Forward-search
+      (global-set-key (kbd "s-f")              'isearch-forward-regexp)  ; Forward-search
       (global-set-key (kbd "s-g")              'isearch-repeat-forward)  ; Forward-search (again)
       (define-key isearch-mode-map (kbd "s-f") 'isearch-repeat-forward)  ; Forward-search (again)
-      (global-set-key (kbd "s-F")              'isearch-backward)        ; Backward-search
+      (global-set-key (kbd "s-F")              'isearch-backward-regexp) ; Backward-search
       (global-set-key (kbd "s-G")              'isearch-repeat-backward) ; Backward-search (again)
       (define-key isearch-mode-map (kbd "s-F") 'isearch-repeat-backward) ; Forward-search (again)
 
@@ -297,7 +309,15 @@
       )
     )
 
-  ;; Built-in emacs mode hooks
+  ;; Keyboard customization
+  ;; Interactive search key bindings. By default, C-s runs
+  ;; isearch-forward, so this swaps the bindings.
+  (global-set-key (kbd "C-s") 'isearch-forward-regexp)
+  (global-set-key (kbd "C-r") 'isearch-backward-regexp)
+  (global-set-key (kbd "C-M-s") 'isearch-forward)
+  (global-set-key (kbd "C-M-r") 'isearch-backward)
+
+  ;; Emacs prog-mode
   (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
   ;; Put customizations in another file
@@ -309,7 +329,7 @@
 
 ;; Theme
 (use-package gruvbox-theme
-  :config (load-theme 'gruvbox-dark-medium t))
+  :config (load-theme 'gruvbox-dark-hard t))
 
 ;; Save position
 (use-package saveplace :config (save-place-mode))
@@ -413,7 +433,7 @@
   :commands (evil-set-initial-state
               evil-ex-define-cmd
               set-evil-initial-state-in-normal-mode)
-  :init     (evil-mode)         ; Evil has to be global :-/
+  :init     (evil-mode)          ; Evil has to be global :-/
   :config
   ;; Ignore evil-mode except for prog-mode
   (setq
@@ -441,6 +461,13 @@
     (evil-ex-define-cmd "q[uit]" 'evil-delete-buffer)
     (evil-ex-define-cmd "wq" 'save-and-kill-buffer))
 
+  ;;;; Enable M-. for goto-definition https://emacs.stackexchange.com/a/38127
+  (define-key evil-normal-state-map (kbd "M-.")
+    `(menu-item "" evil-repeat-pop :filter ,(lambda (cmd) (if (eq last-command 'evil-repeat-pop) cmd))))
+  (define-key evil-insert-state-map (kbd "M-.")
+    `(menu-item "" evil-repeat-pop :filter ,(lambda (cmd) (if (eq last-command 'evil-repeat-pop) cmd))))
+
+
   :bind (:map evil-normal-state-map
           ("C-a" . move-beginning-of-line)
           ("C-e" . move-end-of-line)
@@ -449,7 +476,11 @@
           ("C-e" . move-end-of-line)
           :map evil-insert-state-map
           ("C-a" . move-beginning-of-line)
-          ("C-e" . move-end-of-line)))
+          ("C-e" . move-end-of-line)
+          ))
+
+
+(use-package projectile)
 
 ;;; Nix Mode ;;;
 (use-package nix-mode
@@ -458,9 +489,9 @@
 ;;; Flycheck Mode ;;;
 (use-package flycheck
   :commands (global-flycheck-mode flycheck-mode flycheck-add-next-checker)
-  :config   (global-flycheck-mode)
-  :hook     ((emacs-lisp-mode . flycheck-mode)
-              (sh-mode . flycheck-mode)))
+  :config (global-flycheck-mode)
+  :hook ((emacs-lisp-mode . flycheck-mode)
+          (sh-mode . flycheck-mode)))
 
 ;;; Json Mode ;;;
 (use-package json-mode
@@ -474,9 +505,9 @@
 
 ;;; Haskell ;;;
 (use-package flycheck-haskell
-  :after    flycheck
+  :after flycheck
   :commands flycheck-haskell-setup
-  :hook     (flycheck-mode . flycheck-haskell-setup))
+  :hook (flycheck-mode . flycheck-haskell-setup))
 
 (use-package haskell-mode
   :after evil
@@ -524,11 +555,14 @@
 (use-package racer)
 
 (use-package rust-mode
-  :after racer
+  :after (racer projectile)
   :hook ((rust-mode . racer-mode)
-          (rust-mode . eldoc-mode))
+          (rust-mode . eldoc-mode)
+          (rust-mode . projectile-mode))
   :bind (:map rust-mode-map
-          ("TAB" . company-indent-or-complete-common))
+          ("TAB" . #'company-indent-or-complete-common)
+          ("M-;" . #'smart-comment-region-function)
+          ("M-." . #'racer-find-definition))
   :config
   (setq rust-format-on-save t)
   )

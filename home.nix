@@ -1,7 +1,7 @@
 { pkgs, ... }:
 let
 
-  defaultHaskellPackages = pkgs.haskell.packages.ghc843;
+  defaultHaskellPackages = pkgs.haskell.packages.ghc863;
 
   haskellPackages = defaultHaskellPackages.override {
     overrides = new : old : rec {
@@ -12,21 +12,6 @@ let
           old.ghc-exactprint;
     };
   };
-
-  # Custom Haskell packages
-  hiePkgs = import (pkgs.fetchFromGitHub {
-    owner = "domenkozar";
-    repo = "hie-nix";
-    rev = "96af698f0cfefdb4c3375fc199374856b88978dc";
-    sha256 = "1ar0h12ysh9wnkgnvhz891lvis6x9s8w3shaakfdkamxvji868qa";
-  }) {};
-
-  snack = import (pkgs.fetchFromGitHub {
-    owner = "nmattia";
-    repo = "snack";
-    rev = "6dc8caaec88f9a66ad4f66f396db5d5e58d91064";
-    sha256 = "0w6gliidknnyv6jlk8533lvji4v6icsq6y1zywfbj9q1xsqw3mx2";
-  });
 
 in {
   home.packages = [
@@ -40,6 +25,7 @@ in {
     pkgs.postgresql
     pkgs.flyway
     pkgs.pg_tmp
+    pkgs.sqlite
 
     ## Python
     pkgs.python36
@@ -54,6 +40,11 @@ in {
     pkgs.shfmt
     pkgs.shellcheck
     pkgs.bat
+    pkgs.unrar
+    pkgs.rlwrap
+
+    ## Networking
+    pkgs.inetutils # ifconfig, ftp, etc
 
     ## Editors
     pkgs.vim
@@ -63,7 +54,7 @@ in {
     haskellPackages.ghc
     haskellPackages.stylish-haskell
     haskellPackages.hlint
-    haskellPackages.brittany
+    #haskellPackages.brittany
     haskellPackages.ghcid
     haskellPackages.hasktags
     haskellPackages.hoogle
@@ -76,7 +67,7 @@ in {
     pkgs.z3
 
     ## LaTeX
-    pkgs.texlive.combined.scheme-small
+    pkgs.texlive.combined.scheme-full
     ]
     ++ (if (pkgs.stdenv.isLinux) then [
       ## Linux only packages
@@ -88,6 +79,9 @@ in {
 
       ## Command Line Utilities
       pkgs.xclip
+
+      ## Windows Emulator
+      pkgs.wine
       ] else []);
 
   programs.home-manager = {
