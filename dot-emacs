@@ -1,4 +1,4 @@
-;;; .emacs -- Matthew Doty's emacs configuration   -*- mode: emacs-lisp; lexical-binding: t; -*-
+;;; dot-emacs -- Matthew Doty's emacs configuration
 
 ;;; Commentary:
 ;;;   This .emacs is intended to download all dependencies if
@@ -9,8 +9,7 @@
 ;;; Package Management ;;;
 
 (require 'package)
-(add-to-list 'package-archives
-  '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
 
 ;;; General Emacs Settings ;;;
@@ -26,18 +25,20 @@
   (fset 'yes-or-no-p 'y-or-n-p)
 
   (setq
-    inhibit-startup-screen      t                        ; No startup screen
-    disabled-command-function   nil                      ; No prompts
-    ring-bell-function          'ignore                  ; No error bell
-    interprogram-cut-function   nil                      ; No system clipboard (copy)
-    interprogram-paste-function nil                      ; No system clipboard (paste)
-    vc-follow-symlinks          nil                      ; Always follow symlinks
+    inhibit-startup-screen      t       ; No startup screen
+    disabled-command-function   nil     ; No prompts
+    ring-bell-function          'ignore ; No error bell
+    interprogram-cut-function   nil     ; No system clipboard (copy)
+    interprogram-paste-function nil     ; No system clipboard (paste)
+    vc-follow-symlinks          nil     ; Always follow symlinks
+    initial-scratch-message     ""      ; No scratch message
     )
 
-  (tool-bar-mode -1)                                     ; No tool-bar
-  (menu-bar-mode -1)                                     ; No menu-bar
-  (blink-cursor-mode -1)                                 ; No cursor blinking
-  (when (fboundp 'scroll-bar-mode) (scroll-bar-mode -1)) ; No scrollbar
+  (tool-bar-mode -1)                    ; No tool-bar
+  (menu-bar-mode -1)                    ; No menu-bar
+  (blink-cursor-mode -1)                ; No cursor blinking
+  ;; No scroll bar
+  (when (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 
 
   ;; Don't deselect after copy
@@ -56,138 +57,52 @@
   (require 'uniquify)
   (setq uniquify-buffer-name-style 'reverse)
 
-  ;; Scratch buffer
-  (setq initial-scratch-message "")
-
-  ;; Commenting
-  (defun smart-comment-region-function ()
-    "Comment the current region.  If no region is selected then format the current buffer."
-    (interactive)
-    (if mark-active
-      (comment-or-uncomment-region (region-beginning) (region-end))
-      (comment-or-uncomment-region (line-beginning-position) (line-end-position))))
-
-  ;; Autoformat
-  (require 'cl)
-  (defun smart-buffer-region-format (format-region-fn)
-    "Format the current region using the provided FORMAT-REGION-FN.
-     If no region is selected then format the current buffer."
-    (let ((original-point (point)))
-      (if mark-active
-        (let ((buffer-size-init (buffer-size))
-               (start (region-beginning))
-               (end (region-end))
-               deactivate-mark)
-          (funcall format-region-fn start end)
-          (let ((new-end (+ end (- (buffer-size) buffer-size-init))))
-            (destructuring-bind (new-point . new-region-far-end)
-              (if (eq end original-point)
-                (cons new-end start)
-                (cons start new-end))
-              (set-mark new-region-far-end)
-              (goto-char new-point)))
-          (activate-mark))
-        (progn
-          (funcall format-region-fn (point-min) (point-max))
-          (goto-char original-point)
-          (message "Formatted file %s" (buffer-file-name))))))
-
-  (defun ensure-list (x) (if (listp x) x (list x)))
-
-  (defun smart-mode-buffer-region-format (modes format-region-fn)
-    (when (memq major-mode (ensure-list modes)) (smart-buffer-region-format format-region-fn)))
-
   ;; Elisp
   (setq-default lisp-indent-offset 2)
 
-  (defun elisp-format ()
-    "Format a region of elisp code or the entire buffer if there is no selection."
-    (interactive)
-    (smart-mode-buffer-region-format '(lisp-interaction-mode emacs-lisp-mode) #'indent-region))
-  (define-key emacs-lisp-mode-map (kbd "C-c C-f") #'elisp-format)
-  (define-key lisp-interaction-mode-map (kbd "C-c C-f") #'elisp-format)
-
-  (defun elisp-format-buffer ()
-    "Indent an elisp buffer."
-    (when (equal major-mode 'emacs-lisp-mode)
-      (indent-region (point-min) (point-max))))
-  (add-hook 'before-save-hook #'elisp-format-buffer)
-
-  (defun elisp-eval-region-or-last-expression ()
+  (defun eval-elisp-region-or-expression ()
     "Evaluate a region or expression in elisp."
     (interactive)
-    (if mark-active
-      (eval-region (region-beginning) (region-end) t)
-      (eval-last-sexp nil)))
-  (define-key emacs-lisp-mode-map (kbd "M-RET") #'elisp-eval-region-or-last-expression)
-  (define-key lisp-interaction-mode-map (kbd "M-RET") #'elisp-eval-region-or-last-expression)
-  (define-key emacs-lisp-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
-  (define-key lisp-interaction-mode-map (kbd "s-<return>") #'elisp-eval-region-or-last-expression)
-  (define-key emacs-lisp-mode-map (kbd "M-;") #'smart-comment-region-function)
-  (define-key lisp-interaction-mode-map (kbd "M-;") #'smart-comment-region-function)
+    (cond
+      ;; If region selected, evaluate the region
+      (mark-active
+        (eval-region (region-beginning) (region-end) t))
+      ;; If at the start of an s-expression, evaluate that s-expression
+      ((string= "(" (string (char-after (point))))
+        (save-excursion
+          (forward-sexp)
+          (eval-last-sexp nil)))
+      ;; Otherwise just evaluate the last s-expression
+      (t (eval-last-sexp nil))))
 
-  (defun elisp-evaluate-buffer ()
+  (define-key emacs-lisp-mode-map
+    (kbd "M-RET")
+    'eval-elisp-region-or-expression)
+
+  (define-key emacs-lisp-mode-map
+    (kbd "s-<return>")
+    'eval-elisp-region-or-expression)
+
+  (defun evaluate-elisp-buffer ()
     "Evaluate a buffer of elisp expressions."
     (interactive)
     (eval-buffer)
     (message "Elisp evaluated %s" (buffer-file-name)))
-  (define-key emacs-lisp-mode-map (kbd "C-c C-l") #'elisp-evaluate-buffer)
-  (define-key lisp-interaction-mode-map (kbd "C-c C-l") #'elisp-evaluate-buffer)
 
-  ;; Eldoc mode
+  (define-key
+    emacs-lisp-mode-map
+    (kbd "C-c C-l")
+    'evaluate-elisp-buffer)
+
   (setq eldoc-minor-mode-string nil)
   (add-hook 'emacs-lisp-mode-hook  #'eldoc-mode)
 
-  ;; Shell scripting
-  (require 'sh-script)
+  (defun elisp-indent-file ()
+    "Indent an elisp file."
+    (when (equal major-mode 'emacs-lisp-mode)
+      (indent-region (point-min) (point-max))))
 
-  (setq sh-basic-offset 2)
-  (defconst sh-format-cmd (format "shfmt -i %d" sh-basic-offset))
-
-  ;; TODO: Preserve window position
-  ;; TODO: Check if shfmt exists
-  ;; TODO: Check if shfmt exited properly
-  ;; TODO: Check if leading whitespace
-  ;; TODO: Preserve region trailing whitespace
-  (defun sh-format ()
-    "Format a region of shell commands or the entire buffer if there is no selection."
-    (interactive)
-    (smart-mode-buffer-region-format
-      'sh-mode
-      (lambda (start end)
-        (shell-command-on-region start end sh-format-cmd (buffer-name) t))))
-  (define-key sh-mode-map (kbd "C-c C-f") #'sh-format)
-
-  (defun sh-format-buffer ()
-    "Format a buffer of shell commands."
-    (when (equal major-mode 'sh-mode)
-      (let ((original-point (point)))
-        (shell-command-on-region (point-min) (point-max) sh-format-cmd (buffer-name) t)
-        (goto-char original-point))))
-  (add-hook 'before-save-hook #'sh-format-buffer)
-
-  ;; Eshell
-  (defun eshell/open (file)
-    "Eshell command to open a FILE."
-    (find-file file))
-  (defun eshell/emacs (file)
-    "Hack EMACS to just open a FILE in eshell."
-    (eshell/open file))
-  (defun eshell/vi (file)
-    "Hack VI to just open a FILE in eshell."
-    (eshell/open file))
-  (defun eshell/openo (file)
-    "Eshell command to open a FILE in another window."
-    (find-file-other-window file))
-  (defun eshell/bat (file)
-    "Eshell command to open a FILE (read only)."
-    (find-file-read-only-other-window file))
-  (defun eshell/less (file)
-    "Hack less to open a FILE (read only)."
-    (eshell/bat file))
-  (defun eshell/more (file)
-    "Hack more to open a FILE (read only)."
-    (eshell/bat file))
+  (add-hook 'before-save-hook #'elisp-indent-file)
 
   ;; Ido mode
   (ido-mode t)
@@ -217,8 +132,8 @@
               (and line-number-string
                 (string-to-number line-number-string))))
       (if (and line-number (> line-number 0))
-        (setq ffap-file-at-point-line-number line-number
-          ffap-file-at-point-line-number nil))))
+        (setq ffap-file-at-point-line-number line-number)
+        (setq ffap-file-at-point-line-number nil))))
 
   (defadvice find-file-at-point (after ffap-goto-line-number activate)
     "If `ffap-file-at-point-line-number' is non-nil goto this line."
@@ -227,39 +142,55 @@
       (setq ffap-file-at-point-line-number nil)))
 
   ;; Run git blame at point and put result in message buffer
-  ;; https://jayconrod.com/posts/67/emacs--run-git-blame-on-the-current-line
-  (defun chomp-end (string)
-    "Chomp tailing whitespace from STRING."
-    (replace-regexp-in-string (rx (* (any " \t\n")) eos) "" string))
-
+  ;; based on: https://jayconrod.com/posts/67/emacs--run-git-blame-on-the-current-line
   (defun git-blame ()
-    "Runs `git blame` on the current line and writes the result to the message buffer."
+    "Runs `git blame` on the current line and adds the commit id to the kill ring"
     (interactive)
     (let* ((line-number (save-excursion (goto-char (point-at-bol)) (+ 1 (count-lines 1 (point)))))
             (line-arg (format "%d,%d" line-number line-number))
-            (current-file-name (buffer-file-name))
-            (commit-buf (generate-new-buffer "*git-blame-line-commit*"))
-            (commit-id (unwind-protect
-                         (with-current-buffer commit-buf
-                           (call-process "git" nil commit-buf nil "blame" "-L" line-arg "--" current-file-name)
-                           (buffer-substring 1 9))
-                         (kill-buffer commit-buf))))
-      (if (string= "00000000" commit-id)
-        (message "Not Committed Yet")
-        (let* ((log-buf (generate-new-buffer "*git-blame-line-log*")))
-          (unwind-protect
-            (with-current-buffer log-buf
-              (call-process "git" nil log-buf nil "log" "-1" "--pretty=%h   %an   %s" commit-id)
-              (message "Line %d: %s" line-number (chomp-end (buffer-string))))
-            (kill-buffer log-buf))))))
+            (commit-buf (generate-new-buffer "*git-blame-line-commit*")))
+      (call-process "git" nil commit-buf nil "blame" "-L" line-arg "--" (buffer-file-name))
+      (let* ((commit-id (with-current-buffer commit-buf (buffer-substring 1 9))))
+        (kill-new commit-id)
+        (if (string= "00000000" commit-id)
+          (message "Not Committed Yet")
+          (let* ((log-buf (generate-new-buffer "*git-blame-line-log*")))
+            (call-process "git" nil log-buf nil "log" "-1" "--pretty=%h   %an   %s" commit-id)
+            (with-current-buffer log-buf (message "Line %d: %s" line-number (buffer-string)))
+            (kill-buffer log-buf)))
+        (kill-buffer commit-buf))))
 
   (define-key global-map (kbd "C-c C-b") 'git-blame)
 
+  ;; Eshell
+  (defun eshell/open (file)
+    "Eshell command to open a FILE or FILES."
+    (find-file file))
+  (defun eshell/openo (file)
+    "Eshell command to open a FILE or FILES in another window."
+    (find-file-other-window file))
+  (defun eshell/bat (file)
+    "Eshell command to open a FILE or FILES (read only)."
+    (find-file-read-only-other-window file))
+  (defun eshell/emacs (file &rest files)
+    "Hack EMACS to just open a FILE or FILES in eshell."
+    (apply #'eshell/open (cons file files)))
+  (defun eshell/less (file &rest files)
+    "Hack less to open a FILE or FILES (read only)."
+    (apply #'eshell/bat (cons file files)))
+  (defun eshell/more (file &rest files)
+    "Hack more to open a FILE or FILES (read only)."
+    (apply #'eshell/bat (cons file files)))
+
   ;; Window System Configuration
+
   (when window-system
 
+    ;; Launch Eshell instead of scratch buffer
+    (setq initial-buffer-choice 'eshell)
+
     ;; Transparency
-    ;;(set-frame-parameter (selected-frame) 'alpha '(95 95))
+    (set-frame-parameter (selected-frame) 'alpha '(95 95))
 
     ;; Font Ligatures for OS X
     (when (fboundp 'mac-auto-operator-composition-mode)
@@ -275,49 +206,70 @@
         mac-control-modifier 'control
         mac-option-modifier  'meta
         mac-command-modifier 'super)
-
-      ;; Manipulate font size with usual bindings
-      ;; To return to default font size, <C-x C-0>
-      (global-set-key (kbd "s-=")              'text-scale-increase)
-      (global-set-key (kbd "s-+")              'text-scale-increase)
-      (global-set-key (kbd "s--")              'text-scale-decrease)
-
-      ;; Common key bindings
-      (global-set-key (kbd "s-a")              'mark-whole-buffer)       ; Select all
-
-      ;; Searching
-      (global-set-key (kbd "s-f")              'isearch-forward-regexp)  ; Forward-search
-      (global-set-key (kbd "s-g")              'isearch-repeat-forward)  ; Forward-search (again)
-      (define-key isearch-mode-map (kbd "s-f") 'isearch-repeat-forward)  ; Forward-search (again)
-      (global-set-key (kbd "s-F")              'isearch-backward-regexp) ; Backward-search
-      (global-set-key (kbd "s-G")              'isearch-repeat-backward) ; Backward-search (again)
-      (define-key isearch-mode-map (kbd "s-F") 'isearch-repeat-backward) ; Forward-search (again)
-
-      (global-set-key (kbd "s-z")              'undo)                    ; Undo
-      (global-set-key (kbd "s-s")              'save-buffer)             ; Save
-      (global-set-key (kbd "s-q")              'kill-emacs)              ; Quit
-      (global-set-key (kbd "s-;")              'comment-line)            ; Comment line
-      (global-set-key (kbd "<s-mouse-1>")      'find-file-at-point)      ; Open file clicked
-      )
-
-    (when (eq window-system 'x)
-      ;; Manipulate font size with usual bindings
-      ;; To return to default font size, <C-x C-0>
-      (global-set-key (kbd "C-=") 'text-scale-increase)
-      (global-set-key (kbd "C-+") 'text-scale-increase)
-      (global-set-key (kbd "C--") 'text-scale-decrease)
       )
     )
 
-  ;; Keyboard customization
-  ;; Interactive search key bindings. By default, C-s runs
-  ;; isearch-forward, so this swaps the bindings.
-  (global-set-key (kbd "C-s") 'isearch-forward-regexp)
-  (global-set-key (kbd "C-r") 'isearch-backward-regexp)
-  (global-set-key (kbd "C-M-s") 'isearch-forward)
-  (global-set-key (kbd "C-M-r") 'isearch-backward)
+  ;; Window system key bindings
+  (defun get-command-key ()
+    "Gets the command key for the platform system type."
+    (pcase system-type
+      ('darwin "s")
+      ('x      "c")
+      (other   "c")))
 
-  ;; Emacs prog-mode
+  (defun cmd-set-kbd (key command)
+    "Set the command key + KEY combination to run a COMMAND."
+    (when window-system
+      (global-set-key
+        (kbd (concat (get-command-key) "-" key)) command)))
+
+  (defun cmd-mouse-click (button-combination command)
+    "Set the command key and BUTTON-COMBINATION to run a COMMAND."
+    (when window-system
+      (global-set-key
+        (kbd (concat
+               "<" (get-command-key) "-mouse-" button-combination ">"))
+        command)))
+
+  (defun mode-cmd-set-kbd (mode key command)
+    "For a MODE set the command key + KEY combination to run a COMMAND."
+    (when window-system
+      (define-key mode
+        (kbd (concat (get-command-key) "-" key))
+        'isearch-repeat-backward)))
+
+  ;; Common key bindings
+  (cmd-set-kbd "a" 'mark-whole-buffer)      ; Select all
+
+  ;; Searching
+  (cmd-set-kbd "f" 'isearch-forward)         ; Forward-search
+  (mode-cmd-set-kbd isearch-mode-map "f" 'isearch-repeat-forward)
+  (cmd-set-kbd "g" 'isearch-repeat-forward)  ; Forward-search (again)
+  (cmd-set-kbd "F" 'isearch-backward)        ; Backward-search
+  (mode-cmd-set-kbd isearch-mode-map "F" 'isearch-repeat-backward)
+  (cmd-set-kbd "G" 'isearch-repeat-backward) ; Backward-search (again)
+
+  (cmd-set-kbd "z" 'undo)                         ; Undo
+  (cmd-set-kbd "s" 'save-buffer)                  ; Save
+  (cmd-set-kbd "q" 'kill-emacs)                   ; Quit
+  (cmd-set-kbd ";" 'comment-line)                 ; Comment line
+
+  (cmd-mouse-click "1" 'find-file-at-point)       ; Open file clicked
+
+  ;; Window Management
+
+  (cmd-set-kbd "n" 'new-frame)                    ; New frame
+  (cmd-set-kbd "w" 'delete-frame)                 ; Close the current frame
+  (cmd-set-kbd "~" 'other-frame)                  ; Cycle frames
+  (cmd-set-kbd "`" '(lambda () (other-frame -1))) ; Backward-cycle
+
+  ;; Manipulate font size with usual bindings
+  ;; To return to default font size, <C-x C-0>
+  (cmd-set-kbd "=" 'text-scale-increase)    ; Increase font size
+  (cmd-set-kbd "+" 'text-scale-increase)    ; Increase font size
+  (cmd-set-kbd "-" 'text-scale-decrease)    ; Decrease font size
+
+  ;; Built-in emacs mode hooks
   (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
   ;; Put customizations in another file
@@ -326,10 +278,17 @@
   )
 
 ;;; Interface ;;;
+;; Powerline
+(use-package powerline
+  :config
+  (powerline-center-evil-theme)
+  (powerline-reset))
+
+(use-package powerline-evil)
 
 ;; Theme
-(use-package gruvbox-theme
-  :config (load-theme 'gruvbox-dark-hard t))
+(use-package cyberpunk-theme
+  :config (load-theme 'cyberpunk t))
 
 ;; Save position
 (use-package saveplace :config (save-place-mode))
@@ -363,34 +322,37 @@
     (simpleclip-mode 1)))
 
 ;;; Prog-Mode ;;;
-
 (use-package company
   :demand
   :diminish ""
   :hook (prog-mode . company-mode)
   :config
   (setq
-    company-tooltip-limit             20                      ; bigger popup window
-    company-idle-delay                .3                      ; decrease delay before autocompletion popup shows
-    company-echo-delay                0                       ; remove annoying blinking
-    company-begin-commands            '(self-insert-command)  ; start autocompletion only after typing
-    company-tooltip-align-annotations t
+    ;; bigger popup window
+    company-tooltip-limit  20
+    ;; decrease delay before autocompletion popup shows
+    company-idle-delay     .3
+    ;; remove annoying blinking
+    company-echo-delay     0
+    ;; start autocompletion only after typing
+    company-begin-commands '(self-insert-command)
     ))
 
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
+(use-package color
+  :commands color-complement-hex)
+
 (use-package paren
   :hook (prog-mode . show-paren-mode)
-  :commands color-complement-hex
   :config
-  (require 'color)
   (let ((cursor-color (face-attribute 'cursor :background)))
     (set-face-background 'show-paren-match (color-complement-hex cursor-color))
     (set-face-foreground 'show-paren-match cursor-color))
   )
 
-;; Formatting
+;;; Formatting ;;;
 
 (use-package ethan-wspace
   :hook (prog-mode . ethan-wspace-mode)
@@ -420,7 +382,7 @@
 ;;; Git ;;;
 
 (use-package magit
-  :bind ("C-c C-g" . magit-status)
+  :bind ("C-c g" . magit-status)
   )
 
 (use-package git-gutter
@@ -430,10 +392,8 @@
 ;;; Evil ;;;
 
 (use-package evil
-  :commands (evil-set-initial-state
-              evil-ex-define-cmd
-              set-evil-initial-state-in-normal-mode)
-  :init     (evil-mode)          ; Evil has to be global :-/
+  :commands (evil-set-initial-state evil-ex-define-cmd)
+  :init     (evil-mode)         ; Evil has to be global :-/
   :config
   ;; Ignore evil-mode except for prog-mode
   (setq
@@ -443,10 +403,8 @@
     )
 
   ;; Most of the time we don't want to be in evil-mode, except for prog-mode
-  (defun set-evil-initial-state-in-normal-mode ()
-    "Puts evil in `normal` mode in its initial state."
-    (interactive) (evil-set-initial-state major-mode 'normal))
-  (add-hook 'prog-mode-hook #'set-evil-initial-state-in-normal-mode)
+  (evil-set-initial-state 'prog-mode 'normal)
+  (evil-set-initial-state 'eshell-mode 'emacs)
 
   ;;;; Custom behavior to keep evil from zealously killing emacs when in window-system
   ;;;; TODO: Incorporate http://zuttobenkyou.wordpress.com/category/emacs/
@@ -461,13 +419,6 @@
     (evil-ex-define-cmd "q[uit]" 'evil-delete-buffer)
     (evil-ex-define-cmd "wq" 'save-and-kill-buffer))
 
-  ;;;; Enable M-. for goto-definition https://emacs.stackexchange.com/a/38127
-  (define-key evil-normal-state-map (kbd "M-.")
-    `(menu-item "" evil-repeat-pop :filter ,(lambda (cmd) (if (eq last-command 'evil-repeat-pop) cmd))))
-  (define-key evil-insert-state-map (kbd "M-.")
-    `(menu-item "" evil-repeat-pop :filter ,(lambda (cmd) (if (eq last-command 'evil-repeat-pop) cmd))))
-
-
   :bind (:map evil-normal-state-map
           ("C-a" . move-beginning-of-line)
           ("C-e" . move-end-of-line)
@@ -476,11 +427,7 @@
           ("C-e" . move-end-of-line)
           :map evil-insert-state-map
           ("C-a" . move-beginning-of-line)
-          ("C-e" . move-end-of-line)
-          ))
-
-
-(use-package projectile)
+          ("C-e" . move-end-of-line)))
 
 ;;; Nix Mode ;;;
 (use-package nix-mode
@@ -489,9 +436,9 @@
 ;;; Flycheck Mode ;;;
 (use-package flycheck
   :commands (global-flycheck-mode flycheck-mode flycheck-add-next-checker)
-  :config (global-flycheck-mode)
-  :hook ((emacs-lisp-mode . flycheck-mode)
-          (sh-mode . flycheck-mode)))
+  :config   (global-flycheck-mode)
+  :hook     ((emacs-lisp-mode . flycheck-mode)
+              (sh-mode . flycheck-mode)))
 
 ;;; Json Mode ;;;
 (use-package json-mode
@@ -505,24 +452,26 @@
 
 ;;; Haskell ;;;
 (use-package flycheck-haskell
-  :after flycheck
+  :after    flycheck
   :commands flycheck-haskell-setup
-  :hook (flycheck-mode . flycheck-haskell-setup))
+  :hook     (flycheck-mode . flycheck-haskell-setup)
+  )
 
 (use-package haskell-mode
   :after evil
   :init (evil-set-initial-state 'haskell-cabal-mode 'normal)
   :config
   (remove-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
-  (add-hook 'haskell-mode-hook #'interactive-haskell-mode)
+  ;; (add-hook 'haskell-mode-hook #'interactive-haskell-mode)
   (setq-default haskell-indent-offset 2)
   (setq haskell-interactive-popup-errors  nil
-    haskell-process-type              'auto
-    haskell-tags-on-save              t
-    haskell-process-args-stack-ghci   '("--ghci-options=-ferror-spans -fshow-loaded-modules"
-                                         "--no-build"
-                                         "--no-load"))
-  (add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
+    haskell-process-type                  'auto
+    haskell-tags-on-save                  t
+    haskell-process-args-stack-ghci
+    '("--ghci-options=-ferror-spans -fshow-loaded-modules"
+       "--no-build"
+       "--no-load"))
+  ;;(add-hook 'before-save-hook #'haskell-mode-stylish-buffer)
   :bind
   (:map haskell-mode-map
     ("C-c C-l" . haskell-process-load-file)
@@ -541,31 +490,32 @@
 (use-package dante
   :after flycheck
   :config
-  (flycheck-add-next-checker 'haskell-dante '(warning . haskell-hlint))
+  (flycheck-add-next-checker 'haskell-dante
+    '(warning . haskell-hlint))
   :hook (dante-mode . flycheck-mode)
   )
 
 (use-package intero)
 
-;;; Rust Mode ;;;
-(use-package toml-mode
-  :after evil
-  :config (evil-set-initial-state 'toml-mode 'normal) )
-
-(use-package racer)
-
-(use-package rust-mode
-  :after (racer projectile)
-  :hook ((rust-mode . racer-mode)
-          (rust-mode . eldoc-mode)
-          (rust-mode . projectile-mode))
-  :bind (:map rust-mode-map
-          ("TAB" . #'company-indent-or-complete-common)
-          ("M-;" . #'smart-comment-region-function)
-          ("M-." . #'racer-find-definition))
-  :config
-  (setq rust-format-on-save t)
+;;; Python ;;;
+;; company-jedi wires up jedi to be a backend for the auto completion
+;; library, company-mode.
+(use-package company-jedi
+  :hook ((python-mode . jedi:setup))
+  :commands (enable-company-jedi)
+  :init
+  (setq-default
+    jedi:complete-on-dot t
+    jedi:use-shortcuts   t)
+  (defun enable-company-jedi ()
+    (add-to-list 'company-backends 'company-jedi))
+  (add-hook 'python-mode-hook #'enable-company-jedi)
   )
 
+;; Local Variables:
+;; mode: emacs-lisp
+;; End:
+
 (provide 'dot-emacs)
-;;; dot-emacs ends here
+;;; .emacs ends here
+
