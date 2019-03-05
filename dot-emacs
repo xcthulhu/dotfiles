@@ -350,6 +350,7 @@
 
 ;; Copy-Pasta
 (use-package simpleclip
+  :commands (simpleclip-set-contents)
   :config
   ;; Settup interprogram clipboard interaction
   ;;; For X-Windows (like terminal)
@@ -451,13 +452,33 @@
 
 ;;; Git ;;;
 
+(use-package git-link
+  :commands (copy-git-link)
+  :config
+  (setq git-link-use-commit t)
+
+  ;; Modify git-link to copy the links created using simpleclip
+  ;; monkey-patches `git-link--new', so this might break in future revisions
+  (defun git-link--new (link)
+    (when link
+      (kill-new link)
+      (simpleclip-set-contents link))
+    ;; prevent URL escapes from being interpreted as format strings
+    (message (replace-regexp-in-string "%" "%%" link t t))
+    (setq deactivate-mark t)
+    (when git-link-open-in-browser
+      (browse-url link)))
+
+  :bind ( :map global-map
+          ("C-c C-u" . copy-git-link)
+          )
+  )
+
 (use-package magit
   :after evil
   :commands (git-blame)
   :config
   (evil-set-initial-state 'git-commit-mode 'normal)
-
-  ;; The commands below have nothing to do with magit, this is just a convenient place for them
 
   ;; Run git blame at point and put result in message buffer
   ;; Based off: https://jayconrod.com/posts/67/emacs--run-git-blame-on-the-current-line
@@ -492,14 +513,6 @@
           ("C-c C-b" . git-blame)
           ("C-c C-g" . magit-status)
           )
-  )
-
-(use-package git-link
-  :after simple-clip
-  :commands (git-link)
-  ;; :bind ( :map global-map
-
-  ;;         )
   )
 
 (use-package git-gutter
